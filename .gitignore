@@ -3,3 +3,4 @@ __pycache__/
 *.sqlite
 *.orig
 *.rej
+.DS_Store
