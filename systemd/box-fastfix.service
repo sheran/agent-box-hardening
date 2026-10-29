@@ -1,0 +1,17 @@
+[Unit]
+Description=Box hardening fast-fix watcher (re-hardens reverted files within seconds)
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/opt/box-hardening/box-fastfix-watch.sh --run
+Restart=always
+RestartSec=5
+# The watcher re-execs nothing from writable paths; it refuses to run
+# box-hardening.sh unless the whole tree is root-owned (see README).
+RuntimeDirectory=box-fastfix
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+
+[Install]
+WantedBy=multi-user.target

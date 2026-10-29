@@ -1,0 +1,9 @@
+# shellcheck settings for this repository (picked up automatically).
+# box-hardening.sh is split into lib/*.sh modules that share globals, so
+# per-file "unused"/"unassigned" warnings are noise:
+#   SC2034 variable appears unused     SC2154 variable referenced but not assigned
+#   SC2153 possible misspelling
+# Two idioms are used on purpose throughout:
+#   SC2015 `[ test ] && [ test ] || { fail; }` guard clauses
+#   SC2016 single-quoted `sh -c '... "$1" ...'` whose $1 belongs to the inner shell
+disable=SC2034,SC2154,SC2153,SC2015,SC2016

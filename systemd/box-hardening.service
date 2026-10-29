@@ -1,0 +1,10 @@
+[Unit]
+Description=Box hardening: detect fresh instance, re-harden, record drift
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/box-hardening/examples/hourly.sh
+# Exit 10 (fixed) and 20 (needs attention) are reports, not unit failures.
+SuccessExitStatus=10 20
+Nice=10

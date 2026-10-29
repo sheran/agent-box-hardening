@@ -1,0 +1,42 @@
+{
+  "_comment": "Copy to ~/.config/box-drift/inventory.json (as the agent user) and edit. Paths are examples.",
+  "db": "/home/agent/.local/state/box-drift/drift.sqlite",
+  "jsonl": "/home/agent/.local/state/box-drift/notifications.jsonl",
+  "chains_dir": "/etc/box-hardening/chains",
+  "roots": [
+    "/opt/agent",
+    "/usr/local/bin",
+    "/etc/sudoers.d",
+    "/etc/box-hardening",
+    "/etc/systemd/system"
+  ],
+  "single_files": [
+    "/etc/passwd",
+    "/etc/group",
+    "/etc/hosts",
+    "/etc/resolv.conf",
+    "/etc/machine-id",
+    "/etc/nftables.conf"
+  ],
+  "exclude": ["*/__pycache__", "*/__pycache__/*", "*.pyc"],
+  "meta_only": ["/opt/agent/node_modules/*"],
+  "no_event": ["/etc/resolv.conf"],
+  "proc_roles": {
+    "browser": "(^|/)(chrome|chromium)( |$)",
+    "x-server": "(^|/)Xvfb ",
+    "fastfix": "box-fastfix-watch\\.sh --run",
+    "vpn": "(^|/)tailscaled( |$)"
+  },
+  "redact": [
+    "(?i)(token|key|secret|password|passwd|auth)[=:]\\S+",
+    "--remote-debugging-port=\\d+"
+  ],
+  "version_cmds": {
+    "kernel": ["uname", "-r"],
+    "chrome": ["google-chrome", "--version"],
+    "xvfb-wrapper-hash": ["sha256sum", "/usr/local/bin/xvfb-wrapper"]
+  },
+  "pkg_cmd": ["dpkg-query", "-W", "-f", "${Package} ${Version}\\n"],
+  "use_sudo": false,
+  "max_files": 20000
+}

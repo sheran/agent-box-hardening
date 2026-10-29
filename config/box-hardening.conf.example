@@ -1,0 +1,70 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034  # every variable here is read by box-hardening.sh
+# box-hardening.conf - copy to /etc/box-hardening/box-hardening.conf
+#   install -o root -g root -m 644 config/box-hardening.conf.example /etc/box-hardening/box-hardening.conf
+# It is sourced as root, so box-hardening.sh refuses it unless it is a regular
+# file owned by root and not writable by group or others. No secrets here.
+# Every value below is the built-in default; delete the lines you don't change.
+
+# --- users -------------------------------------------------------------------
+AGENT_USER=agent                       # the user the AI agent runs as
+BROWSER_USER=chrome                    # dedicated, unprivileged browser user
+BROWSER_PREFERRED_UID=""               # uid/gid to use when creating it; empty = system picks
+BROWSER_HOME=/home/chrome
+BROWSER_PROFILE_DIR=/home/chrome/browser-profile
+BROWSER_DISPLAY=1                      # the only display the browser user gets a cookie for
+BROWSER_PROC_REGEX='(^|/)(chrome|chromium|chromium-browser)( |$)'
+# Lets AGENT_USER run commands as BROWSER_USER (never as root), so the launcher
+# can drop to the browser user. Set to "" if your launcher starts the browser
+# some other way (e.g. from a root supervisor with setpriv/runuser).
+BROWSER_SUDOERS=/etc/sudoers.d/agent-browser
+
+# --- managed files and the known-version allowlist ----------------------------
+# Each target is "SECTION|PATH|CHAIN_SET|ROOT_OWNED". The file is PASS only if
+# its sha256 is a hardened hash in ${CHAINS_DIR}/CHAIN_SET/*/hardened.sha256;
+# a known stock or sandbox-only version is re-hardened; anything else is
+# refused until a human reviews it and adds a chain (tools/make-chain.sh).
+CHAINS_DIR=/etc/box-hardening/chains
+TARGETS=(
+	"1|/opt/agent/launchers/browser|browser-launcher|0"
+	"2B|/usr/local/bin/xvfb-wrapper|xvfb-wrapper|1"
+)
+
+# --- firewall for the browser user (Section 2A) -------------------------------
+NFT_TABLE=browser_hardening
+NFT_ALLOWED_LO_PORTS=(3128)            # loopback TCP ports the browser may use, e.g. an egress proxy
+NFT_ALLOW_EXTERNAL=0                   # 1 = browser may also reach public addresses directly
+# Never reachable with NFT_ALLOW_EXTERNAL=1. Keep each list sorted the way
+# `nft list` prints it, or the check reports drift. 100.64.0.0/10 is the
+# carrier-grade NAT range that overlay VPNs commonly use.
+NFT_PRIVATE_V4="10.0.0.0/8, 100.64.0.0/10, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16"
+NFT_PRIVATE_V6="::1, fc00::/7, fe80::/10"
+
+# --- X displays (Section 2B) ---------------------------------------------------
+XAUTH_SRV_PREFIX=/tmp/xauth-srv-       # must match _xa_prefix in the hardened wrapper
+XVFB_AUTH_LOG=/tmp/xvfb-wrapper-auth.log
+XVFB_NOAUTH_DIR=/run/xvfb-wrapper      # root-only opt-out markers noauth-N
+DISPLAY_RESTART_MODE=none              # none | kill (only if a supervisor relaunches a killed Xvfb)
+DMS_SECONDS=600                        # dead-man's-switch window for --restart-displays
+
+# --- permissions (Section 2C) --------------------------------------------------
+WORKSPACE=/workspace
+PRIVATE_DIRS=(                         # globs; each existing dir must be mode 700
+	# "/home/agent/.ssh"
+	# "/home/agent/.config/*"
+)
+SOCKETS=(                              # "PATH|OWNER:GROUP|MODE"
+	# "/run/example-daemon/control.sock|root:agent|660"
+)
+
+# --- state, logs, fresh-instance detection -------------------------------------
+STATE_DIR=/var/lib/box-hardening       # on the root filesystem: holds the instance marker
+BACKUP_DIR=/var/backups/box-hardening
+LOG_FILE=/var/log/box-hardening.log
+LOCK_FILE=/run/box-hardening.lock
+BASELINE_FILE=""                       # default ${WORKSPACE}/.box-hardening/instance-baseline (persistent disk)
+# Optional VPN state file whose loss signals a fresh instance (example: Tailscale).
+VPN_STATE_FILE=""                      # e.g. /var/lib/tailscale/tailscaled.state
+VPN_STATUS_CMD=""                      # e.g. "tailscale status --json | jq -r .BackendState"
+FASTFIX_PIDFILE=/run/box-fastfix/pid
+VERIFY_MAX_PORTS=30                    # cap on local ports probed in the final verification

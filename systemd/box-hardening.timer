@@ -1,0 +1,11 @@
+[Unit]
+Description=Run box hardening at boot and hourly
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

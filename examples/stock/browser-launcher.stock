@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Example "stock" browser launcher, the way an AI agent's cloud VM image might
+# ship one. Written for this repository to illustrate the pattern; it is not a
+# copy of any vendor's launcher. Note the flag that turns the sandbox off, and that Chrome runs
+# as the agent user, with the agent's whole environment (tokens included).
+set -euo pipefail
+
+DISPLAY="${DISPLAY:-:1}"
+export DISPLAY
+BROWSER_BIN="${BROWSER_BIN:-/usr/bin/google-chrome}"
+CDP_PORT="${CDP_PORT:-9222}"
+PROFILE="${BROWSER_PROFILE:-${HOME}/browser-profile}"
+
+FLAGS=(
+	--user-data-dir="${PROFILE}"
+	--remote-debugging-port="${CDP_PORT}"
+	--no-first-run
+	--no-default-browser-check
+	--no-sandbox
+	--disable-dev-shm-usage
+	--password-store=basic
+)
+
+mkdir -p "${PROFILE}"
+chmod 700 "${PROFILE}"
+exec "${BROWSER_BIN}" "${FLAGS[@]}" "$@"

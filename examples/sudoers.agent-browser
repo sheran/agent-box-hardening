@@ -1,0 +1,5 @@
+# /etc/sudoers.d/agent-browser - written by box-hardening.sh (Section 1).
+# The agent user may run commands as the browser user, and only as the browser
+# user (never root), without a password, so the launcher can start Chrome as
+# "chrome". Install with: install -o root -g root -m 440 ... && visudo -cf ...
+agent ALL=(chrome:chrome) NOPASSWD: ALL

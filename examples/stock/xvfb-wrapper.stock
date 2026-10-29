@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Example "stock" Xvfb wrapper: starts display :N with access control disabled
+# (-ac), so any local user, including a sandboxed browser user, can connect to
+# every display, read keystrokes and take screenshots. Written for this
+# repository to illustrate the pattern; not a copy of any vendor's wrapper.
+set -euo pipefail
+
+num="${1:-1}"
+num="${num#:}"
+[ $# -eq 0 ] || shift
+set -- ":${num}" -screen 0 1920x1080x24 -nolisten tcp -ac "$@"
+exec Xvfb "$@"

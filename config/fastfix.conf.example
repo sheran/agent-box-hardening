@@ -1,0 +1,19 @@
+# shellcheck shell=bash disable=SC2034
+# /etc/box-hardening/fastfix.conf - settings for box-fastfix-watch.sh.
+# Must be a root-owned regular file that is not group/other writable.
+# Every line is optional; the values shown are the defaults.
+
+# The hardening script and its lib/ must live in a root-owned tree
+# (every parent directory root-owned, not group/other writable).
+BOX_HARDENING=/opt/box-hardening/box-hardening.sh
+# Extra arguments for every box-hardening.sh call, e.g. a non-default config.
+BOX_HARDENING_ARGS=()
+# Optional drift logger used to record events; ignored if not executable.
+BOX_DRIFT=/opt/box-hardening/box-drift.sh
+
+POLL_SECONDS=2                 # hash check interval (inotifywait, if installed, wakes it sooner)
+RECHECK_UNKNOWN_SECONDS=600    # how often to look again at a refused unknown version
+REFRESH_TARGETS_SECONDS=300    # how often to re-read --list-targets
+BACKOFF=(2 4 8 15 30)          # retry delays after a failed fix
+RUN_DIR=/run/box-fastfix       # pid file and lock
+LOG_FILE=/var/log/box-fastfix.log

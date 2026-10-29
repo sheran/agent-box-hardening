@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Example "stock" Xvfb wrapper: starts display :N with access control disabled
+# (-ac), so any local user, including a sandboxed browser user, can connect to
+# every display, read keystrokes and take screenshots. Written for this
+# repository to illustrate the pattern; not a copy of any vendor's wrapper.
+set -euo pipefail
+
+num="${1:-1}"
+num="${num#:}"
+[ $# -eq 0 ] || shift
+set -- ":${num}" -screen 0 1920x1080x24 -nolisten tcp -ac "$@"
+# >>> box-hardening: X cookie auth >>>
+# Display N gets MIT-MAGIC-COOKIE auth instead of -ac. If ${_xa_prefix}N is
+# missing, a fresh cookie is created (mcookie, piped to xauth on stdin, never in
+# argv or a log), merged into the agent's ~/.Xauthority under a lock, then -ac
+# is dropped and -auth added. The browser user never gets a cookie here; the
+# hardening script copies only the browser display's cookie to it.
+# FAIL-SAFE: if the cookie cannot be created, validated or merged, the display
+# starts with the stock arguments (-ac) and a WARNING is logged, so the agent
+# keeps its desktop and box-hardening.sh --check flags the open display.
+# Root-only opt-out: ${_xa_noauth_dir}/noauth-N.
+_xa_user=agent
+_xa_home=/home/agent
+_xa_prefix=/tmp/xauth-srv-
+_xa_log=/tmp/xvfb-wrapper-auth.log
+_xa_noauth_dir=/run/xvfb-wrapper
+# shellcheck disable=SC2154  # num is set by the wrapper before this block
+_xa_srv="${_xa_prefix}${num}"
+_xa_agentauth="${_xa_home}/.Xauthority"
+_xa_say() {
+	printf '%s xvfb-wrapper[:%s]: %s\n' "$(date '+%F %T %Z')" "${num}" "$*" >&2
+	printf '%s xvfb-wrapper[:%s]: %s\n' "$(date '+%F %T %Z')" "${num}" "$*" >>"${_xa_log}" 2>/dev/null || true
+}
+_xa_as_agent() { if [ "$(id -u)" -eq 0 ]; then runuser -u "${_xa_user}" -- "$@"; else "$@"; fi; }
+_xa_cookie_of() {
+	xauth -i -f "$1" list 2>/dev/null |
+		awk -v d=":${num}" '{ if (substr($1, length($1) - length(d) + 1) == d) { print $3; exit } }'
+}
+_xa_setup() {
+	local tmp cookie have
+	if [ ! -e "${_xa_srv}" ]; then
+		tmp="$(_xa_as_agent mktemp "${_xa_srv}.XXXXXX")" || return 1
+		cookie="$(mcookie 2>/dev/null)" || cookie=""
+		# shellcheck disable=SC2016  # $1 belongs to the inner sh -c
+		if [ "${#cookie}" -ne 32 ] ||
+			! printf 'add :%s . %s\n' "${num}" "${cookie}" | _xa_as_agent sh -c 'umask 077; exec xauth -q -f "$1" source -' _ "${tmp}" 2>/dev/null ||
+			! _xa_as_agent mv -f "${tmp}" "${_xa_srv}"; then
+			rm -f "${tmp}" 2>/dev/null
+			return 1
+		fi
+		_xa_say "created cookie file ${_xa_srv}"
+	fi
+	# Only an agent-owned, private, regular file counts: a file planted in /tmp
+	# by another user would hand that user the cookie.
+	[ -f "${_xa_srv}" ] && [ ! -L "${_xa_srv}" ] &&
+		[ "$(stat -c '%U %a' "${_xa_srv}" 2>/dev/null)" = "${_xa_user} 600" ] || return 1
+	cookie="$(_xa_cookie_of "${_xa_srv}")"
+	[ -n "${cookie}" ] || return 1
+	have="$(xauth -i -f "${_xa_agentauth}" list ":${num}" 2>/dev/null | awk '{ print $3 }')"
+	if [[ $'\n'"${have}"$'\n' != *$'\n'"${cookie}"$'\n'* ]]; then
+		# Serialise with other displays starting at the same time (lock on the
+		# agent's home directory itself, so root never creates a file there).
+		# shellcheck disable=SC2016  # $1 belongs to the inner sh -c
+		printf 'add :%s . %s\n' "${num}" "${cookie}" |
+			_xa_as_agent flock -w 10 "${_xa_home}" sh -c 'umask 077; exec xauth -q -f "$1" source -' _ "${_xa_agentauth}" 2>/dev/null ||
+			return 1
+		_xa_say "merged :${num} cookie into ${_xa_agentauth}"
+	fi
+	return 0
+}
+case "${num}" in
+"" | *[!0-9]*) ;;
+*)
+	if [ -e "${_xa_noauth_dir}/noauth-${num}" ]; then
+		_xa_say "opt-out ${_xa_noauth_dir}/noauth-${num} present; starting with stock arguments"
+	elif _xa_setup; then
+		_xa_args=()
+		for _a in "$@"; do [ "${_a}" = "-ac" ] || _xa_args+=("${_a}"); done
+		set -- "${_xa_args[@]}" -auth "${_xa_srv}"
+	else
+		_xa_say "WARNING: X cookie setup failed for ${_xa_srv}; starting WITHOUT X access control (-ac). Run box-hardening.sh --check."
+	fi
+	;;
+esac
+# <<< box-hardening: X cookie auth <<<
+
+exec Xvfb "$@"

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Example "stock" browser launcher, the way an AI agent's cloud VM image might
+# ship one. Written for this repository to illustrate the pattern; it is not a
+# copy of any vendor's launcher. Note the flag that turns the sandbox off, and that Chrome runs
+# as the agent user, with the agent's whole environment (tokens included).
+set -euo pipefail
+
+DISPLAY="${DISPLAY:-:1}"
+export DISPLAY
+BROWSER_BIN="${BROWSER_BIN:-/usr/bin/google-chrome}"
+CDP_PORT="${CDP_PORT:-9222}"
+PROFILE="${BROWSER_PROFILE:-${HOME}/browser-profile}"
+
+# >>> box-hardening: run the browser as a dedicated unprivileged user >>>
+# The browser runs as `chrome` (no login shell, no supplementary groups, its
+# own home and profile) with a clean environment, so nothing of the agent's
+# (tokens, keys, sockets in its home) reaches the browser process. The agent
+# switches user through a sudo rule that only allows becoming `chrome`, never
+# root. Opt out for one launch with BROWSER_AS_AGENT=1.
+RUN_USER="$(id -un)"
+AS_BROWSER=()
+if [ "${BROWSER_AS_AGENT:-0}" != 1 ] && id -u chrome >/dev/null 2>&1; then
+	RUN_USER=chrome
+	[ "$(id -un)" = chrome ] || AS_BROWSER=(sudo -n -u chrome -g chrome --)
+	PROFILE=/home/chrome/browser-profile
+fi
+# <<< box-hardening <<<
+
+FLAGS=(
+	--user-data-dir="${PROFILE}"
+	--remote-debugging-port="${CDP_PORT}"
+	--no-first-run
+	--no-default-browser-check
+	--disable-dev-shm-usage
+	--password-store=basic
+)
+
+if [ "${RUN_USER}" = chrome ]; then
+	BROWSER_RUNTIME="/tmp/xdg-runtime-chrome"
+	"${AS_BROWSER[@]}" install -d -m 700 "${PROFILE}" "${BROWSER_RUNTIME}"
+	# Clean environment: only what the browser needs, nothing inherited.
+	exec "${AS_BROWSER[@]}" env -i -C /home/chrome \
+		HOME=/home/chrome USER=chrome LOGNAME=chrome \
+		PATH=/usr/local/bin:/usr/bin:/bin \
+		LANG="${LANG:-C.UTF-8}" \
+		DISPLAY="${DISPLAY}" XAUTHORITY=/home/chrome/.Xauthority \
+		XDG_RUNTIME_DIR="${BROWSER_RUNTIME}" \
+		DBUS_SESSION_BUS_ADDRESS=disabled: \
+		"${BROWSER_BIN}" "${FLAGS[@]}" "$@"
+fi
+mkdir -p "${PROFILE}"
+chmod 700 "${PROFILE}"
+exec "${BROWSER_BIN}" "${FLAGS[@]}" "$@"
