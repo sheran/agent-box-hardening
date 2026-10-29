@@ -8,6 +8,6 @@
 # SHA256SUMS does not match the approved hash.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.."
-git ls-files -co --exclude-standard | grep -vx 'SHA256SUMS' | LC_ALL=C sort | xargs -d '\n' sha256sum >SHA256SUMS
+git ls-files -co --exclude-standard | grep -vx 'SHA256SUMS' | LC_ALL=C sort | tr '\n' '\0' | xargs -0 sha256sum >SHA256SUMS
 echo "SHA256SUMS updated ($(wc -l <SHA256SUMS) files)"
 echo "approve with: $(sha256sum SHA256SUMS | cut -d' ' -f1)"
